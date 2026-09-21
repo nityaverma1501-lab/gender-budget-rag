@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.model_cache/
+index/
+*.debug.jsonl
+.claude/
+src/fm_answer
+job_search/

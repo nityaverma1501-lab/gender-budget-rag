@@ -1,0 +1,42 @@
+# Scope
+
+## Included
+
+All 11 corpus files are ingested: the CSV (row-level chunks, one per scheme
+plus Part/Grand-Total rows), the XLS (narrative free-text cells extracted
+separately from the tabular region, whose real header sits 11 rows down with
+a `GRAND TOTAL` row at the very bottom — every data-row chunk carries the
+column-year header forward so a bare list of nine numbers stays
+interpretable), and the seven Delhi PDFs plus the Odisha and Bihar PDFs
+(page-level chunks, page numbers preserved for citation). Retrieval is
+hybrid: dense multilingual embeddings (`intfloat/multilingual-e5-base`) plus
+BM25, with a per-source-file cap so one long prose document can't crowd a
+short-but-correct spreadsheet row out of the results. Two deterministic
+guardrails sit in front of generation: if the question names a specific
+financial year or one of the three covered jurisdictions (Delhi/Odisha/
+Bihar), the system requires the answering excerpt to actually match that
+year/jurisdiction, abstaining otherwise rather than trusting the LLM alone to
+notice a mismatch — added after the model was observed confidently answering
+a "2019-20" question from a real-but-wrong-year 2022-23 document.
+
+## Excluded / handled imperfectly
+
+- **Delhi PDFs are borderless tables.** No explicit column reconstruction
+  from word coordinates; each page is one chunk (header + all scheme rows in
+  reading order) and the LLM infers which number belongs to which column
+  from the header text on the same page. On dense pages with many similar
+  numbers this sometimes misreads a figure (an observed, documented failure
+  mode — see `NOTES.md`).
+- **Hindi text in the Delhi/Bihar PDFs uses a legacy non-Unicode font** and
+  extracts as unsearchable glyph garbage; the multilingual embedding model
+  matches a Devanagari-script query onto the correct English-language row
+  instead, since that's where the real figures are.
+- **`gender_budget_2011-12.pdf` / `gender_budget_2012-13.pdf` are
+  byte-identical**; true content is 2011-12. Flagged in chunk metadata.
+- **XLS multi-row merged labels** are reconstructed by forward-filling
+  nearby non-numeric rows — heuristic, not guaranteed for every row.
+- **Jurisdiction guardrail only covers Delhi/Odisha/Bihar** (the states this
+  corpus actually has). A question naming an uncovered state (e.g. Kerala)
+  isn't caught by that specific check and relies on the LLM alone to
+  recognize the corpus doesn't cover it, which it doesn't always do.
+- No OCR; assumes embedded text layers (true for all 11 files here).

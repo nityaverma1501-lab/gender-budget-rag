@@ -1,0 +1,11 @@
+pandas==3.0.6
+numpy==2.5.3
+pymupdf==1.28.2
+openpyxl==3.1.5
+xlrd==2.0.2
+sentence-transformers==6.1.0
+rank-bm25==0.2.2
+torch==2.14.0
+transformers==5.17.0
+accelerate==1.15.0
+requests==2.34.2
