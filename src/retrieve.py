@@ -83,3 +83,28 @@ class Retriever:
             entry["dense_score"] = float(dense_scores[i])
             results.append(entry)
         return results
+
+    def rerank_by_passage(self, query, chunks, window=3):
+        """Reorder chunks by their best-matching short passage instead of
+        whole-page similarity. A page is embedded as one vector, so a single
+        answer-bearing sentence gets diluted by the ~40 unrelated lines
+        around it -- observed: the page stating "Australia was the first
+        country ... in 1984" ranked below a neighbouring page that never
+        mentions it. Scoring overlapping 3-line windows lets that one
+        sentence carry the page."""
+        if len(chunks) < 2:
+            return chunks
+        windows, owner = [], []
+        for ci, c in enumerate(chunks):
+            lines = [l.strip() for l in c["text"].split("\n") if l.strip()]
+            for i in range(max(1, len(lines) - window + 1)):
+                windows.append("passage: " + " ".join(lines[i : i + window]))
+                owner.append(ci)
+        q_emb = self.model.encode([f"query: {query}"], normalize_embeddings=True)[0]
+        w_emb = self.model.encode(windows, normalize_embeddings=True, batch_size=64)
+        sims = w_emb @ q_emb
+        best = np.full(len(chunks), -1.0)
+        for s, ci in zip(sims, owner):
+            best[ci] = max(best[ci], s)
+        order = np.argsort(-best, kind="stable")
+        return [dict(chunks[i], passage_score=float(best[i])) for i in order]

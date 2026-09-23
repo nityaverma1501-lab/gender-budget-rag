@@ -29,9 +29,10 @@ pip install -r requirements.txt
 - **Any other machine (fallback path):** skip the `swiftc` step. `generate.py`
   falls back to a small local Hugging Face model
   (`Qwen/Qwen2.5-0.5B-Instruct`, ~1GB) run via `transformers`, downloaded
-  automatically on first use. It's noticeably weaker: roughly 3-5/12 on the
-  dev set versus 7/12 for the Apple path (see `NOTES.md`), so answers will
-  differ from the committed `answers.jsonl`.
+  automatically on first use. It's much weaker: 2/12 strictly on the dev
+  set (up to 6/12 counting right-number-missing-unit answers) versus 8/12
+  for the Apple path (see `NOTES.md`), so answers will differ from the
+  committed `answers.jsonl`.
 
 ## Running the pipeline
 

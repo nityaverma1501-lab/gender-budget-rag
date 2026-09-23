@@ -37,19 +37,20 @@ because nothing checked that "Union" and "Odisha" aren't the same thing.
   byte-identical**; true content is 2011-12. Flagged in chunk metadata.
 - **XLS multi-row merged labels** are reconstructed by forward-filling
   nearby non-numeric rows — heuristic, not guaranteed for every row.
-- **Jurisdiction guardrail only covers Delhi/Odisha/Bihar/Union** (the
-  jurisdictions this corpus actually has). A question naming an uncovered
-  state (e.g. Kerala) isn't caught by that specific check and relies on the
-  LLM alone to recognize the corpus doesn't cover it, which it doesn't
-  always do — E13 in `answers.jsonl` asks about Kerala and gets Odisha's
-  number back instead of an abstention, a known, documented miss.
-- **Dev-set accuracy is 7/12 fully correct, not higher** — the remaining
-  4 wrong answers (D05, D06, D07, D11) are the LLM misreading a number out
-  of a dense multi-column table, not retrieval finding the wrong document.
-  See `NOTES.md` for the exact breakdown.
-- **The fallback backend is weaker.** Those 7/12 are on the Apple
+- **Guardrails check years and jurisdictions, not scheme names.** A
+  question about a scheme that isn't in the corpus can still get an answer:
+  E15 asks about a "Mahila Samriddhi Yojana" that appears nowhere in the
+  Odisha document, and gets an unrelated Odisha figure. Uncovered states
+  (e.g. Kerala, E13) currently abstain, but that relies on the model
+  declining rather than on a deterministic check.
+- **Dev-set accuracy is 8/12 fully correct (67%)** — the remaining wrong
+  answers (D05, D06, D11) are the LLM misreading a number off a dense
+  multi-column table even when given the right page. D10 is 2 of 3
+  figures. See `NOTES.md` for the exact breakdown.
+- **The fallback backend is much weaker.** Those 8/12 are on the Apple
   on-device model. On a machine without Apple Intelligence the code falls
-  back to Qwen2.5-0.5B, which scores roughly 3-5/12 on the same questions,
-  so a reviewer running it elsewhere should expect different (worse)
-  answers than the committed `answers.jsonl`.
+  back to Qwen2.5-0.5B, which scores 2/12 strictly (up to 6/12 counting
+  right-number-missing-unit answers), so a reviewer running it elsewhere
+  should expect different, worse answers than the committed
+  `answers.jsonl`.
 - No OCR; assumes embedded text layers (true for all 11 files here).

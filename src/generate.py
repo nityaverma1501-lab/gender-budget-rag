@@ -60,6 +60,11 @@ def _parse_reply(text, fallback_chunks):
     # from the prompt's own instructions/example into its answer -- strip
     # any bracketed placeholder-looking fragment for the same reason.
     raw_answer = re.sub(r"<[^<>]*(?:answer|NOT_FOUND|file|page)[^<>]*>", "", raw_answer, flags=re.IGNORECASE).strip()
+    # A bare unit with no number, e.g. "2005-06 (crore)" or "10% (Rs. crore)"
+    # -- the model tacking a unit onto a year or percentage. Drop it.
+    raw_answer = re.sub(
+        r"\s*\((?:Rs\.?\s*)?(?:crore|lakh|thousand)s?\)", "", raw_answer, flags=re.IGNORECASE
+    ).strip()
 
     known_files = {c["file"] for c in fallback_chunks} if fallback_chunks else set()
 

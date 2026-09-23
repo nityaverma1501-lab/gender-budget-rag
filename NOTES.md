@@ -24,24 +24,30 @@ Apple Intelligence.
 
 ## Honest accuracy
 
-On the 12-question dev set: **7/12 fully correct** (D01, D02, D03, D04,
-D08, D09, D12), **1/12 substantially correct** (D10 — 2 of 3 required
-figures exactly right), **4/12 wrong** (D05, D06, D07, D11 — numeric
-misreads on dense multi-column tables, not retrieval misses). Zero false
-abstentions.
+On the 12-question dev set: **8/12 fully correct (67%)** — D01, D02, D03,
+D04, D07, D08, D09, D12 — plus **D10 substantially correct** (2 of 3
+required figures exactly right) and **3/12 wrong** (D05, D06, D11 — the
+model misreading a number off a dense multi-column table even when given
+the right page). Zero false abstentions. Two identical runs gave
+byte-identical results.
 
-Getting here from an earlier 4/12 took real debugging: a missing "Union"
-jurisdiction let Union-budget questions retrieve from an unrelated state's
-document; Bihar/Odisha (each a single-year document) were wrongly held to
-a year-check meant for Delhi's multi-year PDFs; and BM25 was quietly
-sabotaging Hindi queries by scoring on stray digits alone.
+Getting here from an earlier 4/12 took real debugging, not prompt tweaks:
+a missing "Union" jurisdiction let Union-budget questions retrieve from an
+unrelated state's document; Bihar/Odisha (each a single-year document)
+were wrongly held to a year-check meant for Delhi's multi-year PDFs; BM25
+was sabotaging Hindi queries by scoring on stray digits alone; whole-page
+embeddings buried a single answer-bearing sentence ("Australia was the
+first country...") under a neighbouring page, fixed by re-ranking
+candidates on their best 3-line passage; and a page merely *mentioning*
+"2024-25" (the 2025-26 PDF's Revised Estimates column) was outranking the
+2024-25 document itself. Not every change helped: passage re-ranking
+broke two Hindi questions that whole-page matching had right, so it's
+switched off for Devanagari queries.
 
-I re-ran the same 12 questions through the fallback Qwen backend too
-(what a reviewer without Apple Intelligence gets), with the same fixes
-applied. It lands at roughly 3-5/12 — clearly behind. With retrieval now
-reliably surfacing the right excerpt, the remaining gap is squarely the
-generation model's numeric-reading ability, which 0.5B parameters isn't
-enough for on this corpus's dense tables.
+The fallback Qwen backend (what a reviewer without Apple Intelligence
+gets) scores **2/12 strictly**, up to 6/12 if right-number-missing-unit
+answers count. With retrieval now surfacing the right excerpt, the gap is
+squarely the 0.5B model's numeric reading.
 
 ## An AI mistake I caught
 
@@ -71,7 +77,10 @@ it doesn't, the system abstains — no model call needed.
   9-column XLS rows, instead of relying on the LLM to infer columns from
   raw page text — this is the single biggest source of remaining errors.
 - A real eval harness scoring accuracy automatically against the dev set.
-- Extend the jurisdiction guardrail beyond its hand-built
-  Delhi/Odisha/Bihar/Union list to detect any named Indian state, so an
-  uncovered one (e.g. Kerala, currently answered from Odisha's data
-  instead of abstaining) is caught by name.
+- Extend the year/jurisdiction guardrails to named schemes: if the scheme
+  a question names appears nowhere in the retrieved text, abstain. E15
+  asks about a "Mahila Samriddhi Yojana" that isn't in the Odisha document
+  at all, and the system still answers with an unrelated figure.
+- Detect any named Indian state, not just the hand-built
+  Delhi/Odisha/Bihar/Union list. Kerala (E13) currently abstains, but
+  because the model declined, not because a check caught it.

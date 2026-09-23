@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 from generate import answer as llm_answer
-from retrieve import Retriever
+from retrieve import Retriever, _is_devanagari_query
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -127,8 +127,8 @@ def _try_dual_part_csv_answer(chunks, question_years):
 # the full excerpt text and is instructed to abstain when the specific fact
 # asked for isn't in it.
 MIN_DENSE_SCORE = 0.70
-# Retrieve a fairly wide pool -- only 1 chunk actually reaches the model
-# (generate.build_context caps at max_chunks=1), but the year/jurisdiction
+# Retrieve a fairly wide pool -- only 1 page (or a few short CSV/XLS rows)
+# actually reaches the model (see generate.build_context), but the year/jurisdiction
 # guardrails below need enough candidates to find a same-year,
 # same-jurisdiction chunk even when it isn't in, say, the top 6 by raw
 # similarity (observed: the correct Delhi 2022-23 page ranked ~12th for one
@@ -137,8 +137,19 @@ MIN_DENSE_SCORE = 0.70
 TOP_K = 15
 
 
+SINGLE_FILE_JURISDICTIONS = {"bihar", "odisha"}
+
+
 def run_query(retriever, question, top_k=TOP_K):
-    chunks = retriever.search(question, top_k=top_k)
+    # The retriever caps results per file so one long document can't crowd
+    # out the others. When the question is scoped to a jurisdiction that IS
+    # a single file, there's nothing to stay diverse against, and the cap
+    # just throws candidates away (observed: the Odisha summary page with
+    # the answer never entered the pool because 3 other Odisha pages
+    # outranked it on whole-page similarity).
+    jurisdiction = _question_jurisdiction(question)
+    per_file = top_k if jurisdiction in SINGLE_FILE_JURISDICTIONS else 3
+    chunks = retriever.search(question, top_k=top_k, max_per_file=per_file)
     best = chunks[0]["dense_score"] if chunks else 0.0
 
     if best < MIN_DENSE_SCORE:
@@ -153,7 +164,6 @@ def run_query(retriever, question, top_k=TOP_K):
     # Jurisdiction handling: if the question names one of the three
     # state/UT jurisdictions this corpus covers, require the chunks used
     # for generation to actually come from that jurisdiction's document(s).
-    jurisdiction = _question_jurisdiction(question)
     if jurisdiction:
         jur_matching = [c for c in chunks if _chunk_matches_jurisdiction(c, jurisdiction)]
         if not jur_matching:
@@ -193,6 +203,7 @@ def run_query(retriever, question, top_k=TOP_K):
     # these two, so skip the per-chunk year check.
     SINGLE_YEAR_JURISDICTIONS = {"bihar", "odisha"}
     question_years = _normalize_years(question)
+    priority_len = len(chunks)
     if question_years and jurisdiction not in SINGLE_YEAR_JURISDICTIONS:
         matching = [c for c in chunks if question_years & _normalize_years(c["text"])]
         if not matching:
@@ -204,8 +215,33 @@ def run_query(retriever, question, top_k=TOP_K):
                 "_question_years": list(question_years),
                 "_best_score": best,
             }
+        # A page merely *mentioning* the year isn't the same as a document
+        # *for* that year: the 2025-26 Delhi PDF lists 2024-25 as its
+        # Revised Estimates column, so it passes the check above for a
+        # "2024-25" question too (observed: answered from it, and got the
+        # 2025-26 outlay). Prefer documents whose own filename year matches.
+        own_year = [
+            c for c in matching
+            if question_years & _normalize_years(c["file"].replace("_", " "))
+        ]
+        if own_year:
+            matching = own_year + [c for c in matching if c not in own_year]
         non_matching = [c for c in chunks if c not in matching]
         chunks = matching + non_matching
+        priority_len = len(own_year) if own_year else len(matching)
+
+    # When the top candidate is a full PDF page, generation only gets that
+    # one page -- so which page is first matters a lot. Re-rank the top few
+    # (within the group that already passed the year/jurisdiction checks,
+    # so this can never undo them) by best-matching passage rather than
+    # whole-page similarity.
+    # Skipped for Hindi-script questions: a 3-line window is too little
+    # context for cross-lingual matching, and it demoted the correct page
+    # on two Hindi questions that whole-page similarity had gotten right.
+    RERANK_POOL = 6
+    if chunks and len(chunks[0]["text"]) >= 600 and not _is_devanagari_query(question):
+        head = min(priority_len, RERANK_POOL)
+        chunks = retriever.rerank_by_passage(question, chunks[:head]) + chunks[head:]
 
     if jurisdiction == "union":
         dual = _try_dual_part_csv_answer(chunks, question_years)
