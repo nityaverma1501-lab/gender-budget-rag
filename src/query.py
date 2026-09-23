@@ -24,23 +24,27 @@ def _normalize_years(text):
     return years
 
 
-# This corpus covers exactly three state/UT jurisdictions (plus the Union
-# CSV/XLS). If a question names one of these three (English or Hindi
-# script), the answering chunk must come from that jurisdiction's own
-# file(s) -- cross-lingual dense retrieval was observed to occasionally
-# match a topically-similar page from a *different* state's document (e.g.
-# a Hindi question about Delhi's Ladli Yojna retrieving Bihar-document pages
-# that happen to share vocabulary), which the small local LLM then answered
-# from without noticing the jurisdiction was wrong.
+# This corpus covers exactly four jurisdictions: three states/UTs plus the
+# Union (national) government, which is split across two files (the MRF-13
+# CSV and Statement 20 XLS -- there's no single "Union" filename prefix to
+# match, unlike the state PDFs). If a question names one of these four
+# (English or Hindi script), the answering chunk must come from that
+# jurisdiction's own file(s) -- cross-lingual dense retrieval was observed
+# to occasionally match a topically-similar page from a *different*
+# jurisdiction's document (e.g. a Union Gender Budget Statement question
+# retrieving Odisha-document pages that happen to share vocabulary), which
+# the small local LLM then answered from without noticing the mismatch.
 JURISDICTION_KEYWORDS = {
     "delhi": "delhi", "दिल्ली": "delhi",
     "odisha": "odisha", "orissa": "odisha", "ओड़िशा": "odisha", "उड़ीसा": "odisha",
     "bihar": "bihar", "बिहार": "bihar",
+    "union": "union", "भारत सरकार": "union", "केंद्र सरकार": "union",
 }
-JURISDICTION_FILE_PREFIX = {
-    "delhi": "gender_budget_",
-    "odisha": "14-Gender_Budget.pdf",
-    "bihar": "17107782611749468962.pdf",
+JURISDICTION_FILES = {
+    "delhi": ["gender_budget_"],  # prefix match: gender_budget_2022-23.pdf etc.
+    "odisha": ["14-Gender_Budget.pdf"],
+    "bihar": ["17107782611749468962.pdf"],
+    "union": ["MRF_13_Union_Budget.csv", "stat20.xls"],
 }
 
 
@@ -53,8 +57,7 @@ def _question_jurisdiction(question):
 
 
 def _chunk_matches_jurisdiction(chunk, jurisdiction):
-    expected = JURISDICTION_FILE_PREFIX[jurisdiction]
-    return chunk["file"].startswith(expected)
+    return any(chunk["file"].startswith(prefix) for prefix in JURISDICTION_FILES[jurisdiction])
 
 # If the best retrieved chunk's dense similarity is below this, nothing in
 # the corpus is even topically related -- abstain without asking the LLM.

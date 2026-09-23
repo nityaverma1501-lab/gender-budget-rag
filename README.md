@@ -29,9 +29,10 @@ pip install -r requirements.txt
 - **Any other machine (fallback path):** skip the `swiftc` step. `generate.py`
   falls back to a small local Hugging Face model
   (`Qwen/Qwen2.5-0.5B-Instruct`, ~1GB) run via `transformers`, downloaded
-  automatically on first use. Answer quality is noticeably lower than the
-  Apple Intelligence path (see `NOTES.md`) — treat it as a compatibility
-  fallback, not the intended way to run this.
+  automatically on first use. On the dev set both backends land in a similar,
+  modest accuracy range (see `NOTES.md` for the exact breakdown) with
+  different failure patterns rather than one being clearly better — neither
+  is highly reliable on the messier tables in this corpus.
 
 ## Running the pipeline
 

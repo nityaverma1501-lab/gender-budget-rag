@@ -96,6 +96,17 @@ def _fix_thousand_to_crore(text):
     return _THOUSAND_RE.sub(repl, text)
 
 
+def _truncate_on_boundary(text, limit):
+    """Cut at the last newline before `limit` rather than mid-line, so a
+    borderless-table row (scheme name on one line, its numbers on the next)
+    doesn't get split in half -- a raw text[:limit] cut was observed to
+    occasionally sever a row from the numbers that belong to it."""
+    if len(text) <= limit:
+        return text
+    cut = text.rfind("\n", 0, limit)
+    return text[: cut if cut > limit * 0.5 else limit]
+
+
 def build_context(chunks, total_char_budget=3200, max_chunks=1):
     # Apple's on-device model has a 4096-token context window, shared with
     # the system instructions and the question. Rather than a flat per-chunk
@@ -105,7 +116,10 @@ def build_context(chunks, total_char_budget=3200, max_chunks=1):
     # rows) are included in full essentially for free, leaving more room for
     # further-down-the-list chunks to fit too; a large page chunk that would
     # blow the remaining budget is truncated to what's left, and we stop
-    # once the budget runs out.
+    # once the budget runs out. Chunks are expected to already be filtered/
+    # reordered by the caller's guardrails (year/jurisdiction match), so
+    # chunks[0] is the best-evidenced excerpt, not just the highest raw
+    # similarity score.
     parts = []
     remaining = total_char_budget
     for c in chunks[:max_chunks]:
@@ -116,7 +130,7 @@ def build_context(chunks, total_char_budget=3200, max_chunks=1):
             loc += f", page={c['page']}"
         if c.get("unit_hint"):
             loc += f", unit_hint={c['unit_hint']}"
-        text = c["text"][:remaining]
+        text = _truncate_on_boundary(c["text"], remaining)
         remaining -= len(text)
         parts.append(f"--- Excerpt ({loc}) ---\n{text}")
     return "\n\n".join(parts)

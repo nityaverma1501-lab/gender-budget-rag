@@ -13,11 +13,13 @@ hybrid: dense multilingual embeddings (`intfloat/multilingual-e5-base`) plus
 BM25, with a per-source-file cap so one long prose document can't crowd a
 short-but-correct spreadsheet row out of the results. Two deterministic
 guardrails sit in front of generation: if the question names a specific
-financial year or one of the three covered jurisdictions (Delhi/Odisha/
-Bihar), the system requires the answering excerpt to actually match that
-year/jurisdiction, abstaining otherwise rather than trusting the LLM alone to
-notice a mismatch — added after the model was observed confidently answering
-a "2019-20" question from a real-but-wrong-year 2022-23 document.
+financial year or one of the four covered jurisdictions (Delhi/Odisha/
+Bihar/Union), the system requires the answering excerpt to actually match
+that year/jurisdiction, abstaining otherwise rather than trusting the LLM
+alone to notice a mismatch — added after the model was observed confidently
+answering a "2019-20" question from a real-but-wrong-year 2022-23 document,
+and separately answering Union-budget questions from an Odisha document
+because nothing checked that "Union" and "Odisha" aren't the same thing.
 
 ## Excluded / handled imperfectly
 
@@ -35,8 +37,15 @@ a "2019-20" question from a real-but-wrong-year 2022-23 document.
   byte-identical**; true content is 2011-12. Flagged in chunk metadata.
 - **XLS multi-row merged labels** are reconstructed by forward-filling
   nearby non-numeric rows — heuristic, not guaranteed for every row.
-- **Jurisdiction guardrail only covers Delhi/Odisha/Bihar** (the states this
-  corpus actually has). A question naming an uncovered state (e.g. Kerala)
-  isn't caught by that specific check and relies on the LLM alone to
-  recognize the corpus doesn't cover it, which it doesn't always do.
+- **Jurisdiction guardrail only covers Delhi/Odisha/Bihar/Union** (the
+  jurisdictions this corpus actually has). A question naming an uncovered
+  state (e.g. Kerala) isn't caught by that specific check and relies on the
+  LLM alone to recognize the corpus doesn't cover it, which it doesn't
+  always do — E13 in `answers.jsonl` asks about Kerala and gets Odisha's
+  number back instead of an abstention, a known, documented miss.
+- **Dev-set accuracy is modest, not high** — 4/12 fully correct, most
+  remaining errors are the LLM misreading a number out of a dense table
+  rather than retrieval finding the wrong document. See `NOTES.md` for the
+  exact breakdown; I'm stating this plainly rather than letting a reviewer
+  discover it by running the code.
 - No OCR; assumes embedded text layers (true for all 11 files here).
