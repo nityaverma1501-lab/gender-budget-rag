@@ -1,12 +1,12 @@
 {"question_id": "D01", "answered": true, "answer": "88044.21 crore", "sources": [{"file": "MRF_13_Union_Budget.csv", "page": null}]}
-{"question_id": "D02", "answered": true, "answer": "15004.65 crore", "sources": [{"file": "MRF_13_Union_Budget.csv", "page": null}]}
-{"question_id": "D03", "answered": true, "answer": "20000", "sources": [{"file": "gender_budget_2024-25.pdf", "page": null}]}
-{"question_id": "D04", "answered": true, "answer": "1000000", "sources": [{"file": "gender_budget_2026-27.pdf", "page": null}]}
-{"question_id": "D05", "answered": true, "answer": "933.900 crore", "sources": [{"file": "gender_budget_2025-26.pdf", "page": 2}]}
-{"question_id": "D06", "answered": true, "answer": "1787841.23 Lakh; 2024-25 BE is higher than 2023-24 BE.", "sources": [{"file": "14-Gender_Budget.pdf", "page": 22}]}
+{"question_id": "D02", "answered": true, "answer": "Under Part A it is Rs 870.0 crore; under Part B it is Rs 15004.65 crore.", "sources": [{"file": "MRF_13_Union_Budget.csv", "page": null}, {"file": "MRF_13_Union_Budget.csv", "page": null}]}
+{"question_id": "D03", "answered": true, "answer": "Rs 20000 thousand (Rs 2 crore).", "sources": [{"file": "gender_budget_2024-25.pdf", "page": 1}]}
+{"question_id": "D04", "answered": true, "answer": "100000 thousand (Rs 10 crore).", "sources": [{"file": "gender_budget_2026-27.pdf", "page": 1}]}
+{"question_id": "D05", "answered": true, "answer": "Rs 1 crore (Rs 10000000).", "sources": [{"file": "gender_budget_2025-26.pdf", "page": 2}]}
+{"question_id": "D06", "answered": true, "answer": "Rs 1787841.23 Lakh (2024-25 BE) is higher than Rs 7562291.75 Lakh (2023-24 BE).", "sources": [{"file": "14-Gender_Budget.pdf", "page": 22}]}
 {"question_id": "D07", "answered": true, "answer": "India, 2005-06", "sources": [{"file": "14-Gender_Budget.pdf", "page": 13}]}
-{"question_id": "D08", "answered": true, "answer": "88,143 crore", "sources": [{"file": "stat20.xls", "page": null}]}
-{"question_id": "D09", "answered": true, "answer": "30 Ministries/Departments and 5 Union Territory governments", "sources": [{"file": "stat20.xls", "page": null}]}
-{"question_id": "D10", "answered": false, "answer": "", "sources": []}
-{"question_id": "D11", "answered": true, "answer": "2441000", "sources": [{"file": "gender_budget_2026-27.pdf", "page": 1}]}
-{"question_id": "D12", "answered": false, "answer": "", "sources": []}
+{"question_id": "D08", "answered": true, "answer": "Rs 88,143 crore (BE 2012-13).", "sources": [{"file": "stat20.xls", "page": 1}]}
+{"question_id": "D09", "answered": true, "answer": "30 Ministries/Departments and 5 Union Territory governments", "sources": [{"file": "stat20.xls", "page": 1}]}
+{"question_id": "D10", "answered": true, "answer": "Rs. 12 per day for severely malnourished children and Rs. 9.50 per day for pregnant or lactating mothers.", "sources": [{"file": "17107782611749468962.pdf", "page": 25}]}
+{"question_id": "D11", "answered": true, "answer": "Rs 2133300 thousand (Rs 213.33 crore).", "sources": [{"file": "gender_budget_2026-27.pdf", "page": 5}]}
+{"question_id": "D12", "answered": true, "answer": "10.47 lakh (self-help groups)", "sources": [{"file": "17107782611749468962.pdf", "page": 19}]}

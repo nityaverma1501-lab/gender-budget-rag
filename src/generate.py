@@ -20,13 +20,16 @@ SYSTEM_PROMPT = """Answer questions about Indian gender budget documents using O
 Never use outside knowledge. If the excerpts don't clearly contain the answer, reply exactly: \
 ANSWER: NOT_FOUND
 Give a COMPLETE answer: include the exact number AND its unit (crore/lakh/thousand) AND any \
-qualifying detail the question asks for (e.g. both parts of a two-part question). If two figures \
-both apply (e.g. a scheme listed under both Part A and Part B), report both, labelled. \
-If excerpts show similar data for different years or documents, use ONLY the one matching \
-exactly what the question asks (check the year/jurisdiction carefully) and ignore the rest.
+qualifying detail the question asks for. If excerpts show similar data for different years or \
+documents, use ONLY the one matching exactly what the question asks (check the year/jurisdiction \
+carefully) and ignore the rest.
 Reply in EXACTLY two lines, no other text:
-ANSWER: <complete direct answer, or NOT_FOUND>
+ANSWER: <a short direct answer, or NOT_FOUND>
 SOURCES: <comma-separated "file p.N">
+
+Example:
+ANSWER: Rs 20,000 thousand (Rs 2 crore).
+SOURCES: gender_budget_2024-25.pdf p.1
 """
 
 _SOURCE_RE = re.compile(r"([^,;]+?\.(?:pdf|csv|xls))\s*(?:p\.?\s*(\d+))?", re.IGNORECASE)
@@ -53,6 +56,12 @@ def _parse_reply(text, fallback_chunks):
     # format from the prompt back into its answer instead of using the
     # SOURCES: line -- strip that artifact rather than leaking it to the user.
     raw_answer = re.sub(r"[<(]file=.*?[)>]", "", raw_answer).strip()
+    # It has also been observed echoing the literal "<placeholder>" text
+    # from the prompt's own instructions/example into its answer -- strip
+    # any bracketed placeholder-looking fragment for the same reason.
+    raw_answer = re.sub(r"<[^<>]*(?:answer|NOT_FOUND|file|page)[^<>]*>", "", raw_answer, flags=re.IGNORECASE).strip()
+
+    known_files = {c["file"] for c in fallback_chunks} if fallback_chunks else set()
 
     sources = []
     if sources_match:
@@ -60,11 +69,18 @@ def _parse_reply(text, fallback_chunks):
         for m in _SOURCE_RE.finditer(sources_line):
             fname = m.group(1).strip()
             page = int(m.group(2)) if m.group(2) else None
-            sources.append({"file": fname, "page": page})
+            # The model has been observed to cite a filename it was never
+            # actually shown (e.g. one from an unrelated jurisdiction) --
+            # a fabricated citation is worse than none, so only keep a
+            # cited source if it matches a chunk that was really in its
+            # context.
+            if not known_files or fname in known_files:
+                sources.append({"file": fname, "page": page})
 
     if not sources and fallback_chunks:
-        # The model gave a real answer but didn't cite cleanly -- fall back
-        # to the single highest-ranked retrieved chunk as the source.
+        # The model gave a real answer but didn't cite cleanly (or cited
+        # something fabricated, filtered out above) -- fall back to the
+        # single highest-ranked retrieved chunk as the source.
         top = fallback_chunks[0]
         sources.append({"file": top["file"], "page": top.get("page")})
 
@@ -107,7 +123,10 @@ def _truncate_on_boundary(text, limit):
     return text[: cut if cut > limit * 0.5 else limit]
 
 
-def build_context(chunks, total_char_budget=3200, max_chunks=1):
+_ROW_CHUNK_LEN = 600  # below this, treat a chunk as a short CSV/XLS row, not a PDF page
+
+
+def build_context(chunks, total_char_budget=3200, max_chunks=None):
     # Apple's on-device model has a 4096-token context window, shared with
     # the system instructions and the question. Rather than a flat per-chunk
     # cap (which either wastes budget on short row-based chunks or cuts a
@@ -120,6 +139,18 @@ def build_context(chunks, total_char_budget=3200, max_chunks=1):
     # reordered by the caller's guardrails (year/jurisdiction match), so
     # chunks[0] is the best-evidenced excerpt, not just the highest raw
     # similarity score.
+    #
+    # max_chunks defaults adaptively: a dense borderless PDF page confuses
+    # the model when a second, similarly-dense page is added alongside it
+    # (observed: correct single-page answers turned wrong once a second
+    # page's numbers entered the same prompt) -- so those get capped to 1.
+    # But a short CSV/XLS row is a clean "Category: X | Scheme: Y | value: Z"
+    # line with no such risk, and some questions legitimately need two of
+    # them (e.g. a scheme listed under both Part A and Part B) -- those get
+    # room for several.
+    if max_chunks is None:
+        max_chunks = 4 if chunks and len(chunks[0]["text"]) < _ROW_CHUNK_LEN else 1
+
     parts = []
     remaining = total_char_budget
     for c in chunks[:max_chunks]:
@@ -250,14 +281,32 @@ BACKEND = "apple_foundation_models" if _fm_available() else f"transformers:{HF_M
 
 
 def answer(question, chunks):
+    used_fallback = False
     if _fm_available():
-        # Retry with a shrinking context budget on context-window errors --
-        # observed occasionally even for single, modest-length chunks (the
-        # on-device model's 4096-token budget covers instructions + excerpt
-        # + question + response together, and English-Hindi mixed text in
-        # these PDFs tokenizes less predictably than plain English).
+        # Retry on failure. Three distinct failure modes observed:
+        # (1) context-window overflow -- shrinking the excerpt budget fixes
+        #     it (the 4096-token budget covers instructions + excerpt +
+        #     question + response together, and mixed English/Hindi text
+        #     tokenizes less predictably than plain English);
+        # (2) a transient hang talking to the on-device model daemon, which
+        #     has nothing to do with content size -- retrying the *same*
+        #     budget after a short pause usually succeeds;
+        # (3) Apple's built-in content-safety guardrail refusing to answer
+        #     at all -- observed on entirely benign government text (child
+        #     malnutrition rates, menstrual hygiene programmes), which no
+        #     amount of retrying or budget-shrinking fixes since it isn't a
+        #     size or transient problem, it's a hard content-policy refusal.
+        # For (3) especially, retrying forever would just keep failing, so
+        # after exhausting retries we fall back to the local Qwen model
+        # (which has no such guardrail) rather than silently abstaining on
+        # a question the corpus actually answers.
+        import time as _time
+
         last_error = None
-        for budget in (3200, 1800, 900):
+        gen_text = None
+        for attempt, budget in enumerate((3200, 3200, 1800, 900, 900)):
+            if attempt > 0:
+                _time.sleep(2)
             context = build_context(chunks, total_char_budget=budget)
             user_prompt = f"Excerpts:\n\n{context}\n\nQuestion: {question}\n\nReply:"
             try:
@@ -265,8 +314,20 @@ def answer(question, chunks):
                 break
             except Exception as e:
                 last_error = e
-        else:
-            return {"answered": False, "answer": "", "sources": [], "_error": str(last_error)}
+
+        if gen_text is None:
+            try:
+                # Qwen has a much larger context window than Apple's 4096
+                # tokens -- no need to starve it down to 1200 chars, which
+                # was observed to cut the answer's actual numbers out of the
+                # excerpt entirely and make the model invent plausible-
+                # looking ones instead.
+                context = build_context(chunks, total_char_budget=3200)
+                user_prompt = f"Excerpts:\n\n{context}\n\nQuestion: {question}\n\nReply:"
+                gen_text = _hf_generate(SYSTEM_PROMPT, user_prompt)
+                used_fallback = True
+            except Exception:
+                return {"answered": False, "answer": "", "sources": [], "_error": str(last_error)}
     else:
         context = build_context(chunks)
         user_prompt = f"Excerpts:\n\n{context}\n\nQuestion: {question}\n\nReply:"
@@ -274,4 +335,6 @@ def answer(question, chunks):
 
     result = _parse_reply(gen_text, chunks)
     result["_raw"] = gen_text
+    if used_fallback:
+        result["_used_qwen_fallback"] = True
     return result

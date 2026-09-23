@@ -29,10 +29,9 @@ pip install -r requirements.txt
 - **Any other machine (fallback path):** skip the `swiftc` step. `generate.py`
   falls back to a small local Hugging Face model
   (`Qwen/Qwen2.5-0.5B-Instruct`, ~1GB) run via `transformers`, downloaded
-  automatically on first use. On the dev set both backends land in a similar,
-  modest accuracy range (see `NOTES.md` for the exact breakdown) with
-  different failure patterns rather than one being clearly better — neither
-  is highly reliable on the messier tables in this corpus.
+  automatically on first use. It's noticeably weaker: roughly 3-5/12 on the
+  dev set versus 7/12 for the Apple path (see `NOTES.md`), so answers will
+  differ from the committed `answers.jsonl`.
 
 ## Running the pipeline
 
@@ -88,6 +87,6 @@ python3 ask.py
 5. **Gate** (`src/query.py`) — three checks run before/around generation:
    a minimum retrieval-similarity floor, a deterministic check that a
    year named in the question actually appears in the retrieved text, and
-   a deterministic check that a named jurisdiction (Delhi/Odisha/Bihar)
+   a deterministic check that a named jurisdiction (Delhi/Odisha/Bihar/Union)
    matches the source document — each abstains without asking the LLM when
    it fails, rather than relying solely on the model to notice a mismatch.

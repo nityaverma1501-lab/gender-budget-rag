@@ -11,10 +11,25 @@ from index import EMBED_MODEL, EMB_PATH, load_chunks
 ROOT = Path(__file__).resolve().parent.parent
 
 _TOKEN_RE = re.compile(r"[a-zA-Z0-9%.]+")
+_DEVANAGARI_RE = re.compile(r"[ऀ-ॿ]")
 
 
 def _tokenize(text):
     return _TOKEN_RE.findall(text.lower())
+
+
+def _is_devanagari_query(text, threshold=0.3):
+    """BM25's tokenizer only extracts [a-zA-Z0-9%.], so a Hindi-script query
+    reduces to just its stray digits (e.g. "2024", "25") -- meaningless
+    noise that can still out-rank the dense embedding score on the actual
+    right page (observed: pulled a wrong page above the correct one purely
+    on a coincidental digit match). Detect a majority-Devanagari query so
+    the caller can lean on dense similarity alone instead."""
+    letters = [c for c in text if c.isalpha()]
+    if not letters:
+        return False
+    devanagari = sum(1 for c in letters if _DEVANAGARI_RE.match(c))
+    return devanagari / len(letters) >= threshold
 
 
 class Retriever:
@@ -25,6 +40,12 @@ class Retriever:
         self.bm25 = BM25Okapi([_tokenize(c["text"]) for c in self.chunks])
 
     def search(self, query, top_k=8, dense_weight=0.6, max_per_file=3):
+        if _is_devanagari_query(query):
+            # BM25 can't meaningfully score a Hindi-script query (see
+            # _is_devanagari_query) -- rely on dense cross-lingual
+            # similarity alone rather than let stray digit matches skew
+            # the ranking.
+            dense_weight = 1.0
         q_emb = self.model.encode([f"query: {query}"], normalize_embeddings=True)[0]
         dense_scores = self.embeddings @ q_emb  # cosine sim, already normalized
 

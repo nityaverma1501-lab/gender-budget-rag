@@ -43,9 +43,13 @@ because nothing checked that "Union" and "Odisha" aren't the same thing.
   LLM alone to recognize the corpus doesn't cover it, which it doesn't
   always do — E13 in `answers.jsonl` asks about Kerala and gets Odisha's
   number back instead of an abstention, a known, documented miss.
-- **Dev-set accuracy is modest, not high** — 4/12 fully correct, most
-  remaining errors are the LLM misreading a number out of a dense table
-  rather than retrieval finding the wrong document. See `NOTES.md` for the
-  exact breakdown; I'm stating this plainly rather than letting a reviewer
-  discover it by running the code.
+- **Dev-set accuracy is 7/12 fully correct, not higher** — the remaining
+  4 wrong answers (D05, D06, D07, D11) are the LLM misreading a number out
+  of a dense multi-column table, not retrieval finding the wrong document.
+  See `NOTES.md` for the exact breakdown.
+- **The fallback backend is weaker.** Those 7/12 are on the Apple
+  on-device model. On a machine without Apple Intelligence the code falls
+  back to Qwen2.5-0.5B, which scores roughly 3-5/12 on the same questions,
+  so a reviewer running it elsewhere should expect different (worse)
+  answers than the committed `answers.jsonl`.
 - No OCR; assumes embedded text layers (true for all 11 files here).

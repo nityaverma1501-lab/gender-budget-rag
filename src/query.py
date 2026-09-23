@@ -59,6 +59,64 @@ def _question_jurisdiction(question):
 def _chunk_matches_jurisdiction(chunk, jurisdiction):
     return any(chunk["file"].startswith(prefix) for prefix in JURISDICTION_FILES[jurisdiction])
 
+
+# The Union CSV lists many schemes under BOTH Part A and Part B with
+# different figures for each -- a legitimate "two right answers" case (see
+# questions_dev.jsonl's own note on this). The LLM was observed to see both
+# rows in its context and still only report one, silently dropping the
+# other rather than synthesizing "both" reliably. Since the CSV's row
+# format is fixed and machine-generated (src/ingest.py's extract_union_csv),
+# it's more reliable to detect this pattern and build the answer directly
+# from the parsed fields than to keep hoping the LLM notices.
+_CSV_ROW_RE = re.compile(r"Category:\s*(PART [AB])[^|]*\|.*?Scheme:\s*([^|]+?)\s*\|")
+_CSV_YEAR_VALUE_RE = re.compile(r"(\d{4}-\d{4} Budget Estimates):\s*([\d.]+)")
+
+
+def _try_dual_part_csv_answer(chunks, question_years):
+    by_scheme = {}
+    for c in chunks:
+        if not c["file"].endswith(".csv"):
+            continue
+        m = _CSV_ROW_RE.search(c["text"])
+        if not m:
+            continue
+        part, scheme = m.group(1), m.group(2).strip().lower()
+        by_scheme.setdefault(scheme, {})[part] = c
+
+    for parts in by_scheme.values():
+        if "PART A" not in parts or "PART B" not in parts:
+            continue
+
+        target_col = None
+        if question_years:
+            start = next(iter(question_years)).split("-")[0]
+            target_col = f"{start}-{int(start) + 1} Budget Estimates"
+
+        values = {}
+        for label, c in parts.items():
+            col_values = dict(_CSV_YEAR_VALUE_RE.findall(c["text"]))
+            if target_col and target_col in col_values:
+                values[label] = col_values[target_col]
+            elif col_values:
+                # fall back to the last (rightmost / most recent) column
+                values[label] = list(col_values.values())[-1]
+
+        if values.get("PART A") and values.get("PART B"):
+            answer = (
+                f"Under Part A it is Rs {values['PART A']} crore; "
+                f"under Part B it is Rs {values['PART B']} crore."
+            )
+            return {
+                "answered": True,
+                "answer": answer,
+                "sources": [
+                    {"file": parts["PART A"]["file"], "page": None},
+                    {"file": parts["PART B"]["file"], "page": None},
+                ],
+                "_deterministic_dual_part": True,
+            }
+    return None
+
 # If the best retrieved chunk's dense similarity is below this, nothing in
 # the corpus is even topically related -- abstain without asking the LLM.
 # This is deliberately a low bar (a *safety net*, not the main abstention
@@ -124,8 +182,18 @@ def run_query(retriever, question, top_k=TOP_K):
     # of them do, that's a reliable signal the corpus doesn't cover this
     # year, so abstain deterministically rather than let a small local LLM
     # guess from the wrong year's figures (observed doing exactly that).
+    #
+    # Exception: Bihar and Odisha are each a single document covering one
+    # year only (unlike the Delhi PDFs, which repeat their year on every
+    # page, or the Union CSV/XLS, which mix years in the same table). Their
+    # pages don't restate "2024-25" on every page, so requiring it in-chunk
+    # produced false abstentions on genuinely-correct pages (observed on a
+    # Bihar page with the right nutrition-rate figures but no literal year
+    # string). Jurisdiction match already guarantees the year is right for
+    # these two, so skip the per-chunk year check.
+    SINGLE_YEAR_JURISDICTIONS = {"bihar", "odisha"}
     question_years = _normalize_years(question)
-    if question_years:
+    if question_years and jurisdiction not in SINGLE_YEAR_JURISDICTIONS:
         matching = [c for c in chunks if question_years & _normalize_years(c["text"])]
         if not matching:
             return {
@@ -138,6 +206,12 @@ def run_query(retriever, question, top_k=TOP_K):
             }
         non_matching = [c for c in chunks if c not in matching]
         chunks = matching + non_matching
+
+    if jurisdiction == "union":
+        dual = _try_dual_part_csv_answer(chunks, question_years)
+        if dual:
+            dual["_best_score"] = best
+            return dual
 
     result = llm_answer(question, chunks)
     result["_best_score"] = best
