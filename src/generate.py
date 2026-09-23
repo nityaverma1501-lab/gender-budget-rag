@@ -216,6 +216,8 @@ def _is_fully_written(path):
     if not path.exists():
         return False
     st = path.stat()
+    if not hasattr(st, "st_blocks"):  # Windows has no block count; trust the size
+        return st.st_size > 0
     actual_bytes = st.st_blocks * 512
     return actual_bytes >= st.st_size * 0.99
 

@@ -2,6 +2,7 @@
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 
 from generate import answer as llm_answer
@@ -268,6 +269,9 @@ def to_record(question_id, result):
 
 
 def main():
+    # Windows' default console/file encoding (cp1252) can't print the Hindi
+    # questions; force UTF-8 so a redirected run doesn't crash.
+    sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
     ap.add_argument("questions_file")
     ap.add_argument("out_file")
@@ -275,7 +279,7 @@ def main():
     args = ap.parse_args()
 
     retriever = Retriever()
-    questions = [json.loads(l) for l in open(args.questions_file)]
+    questions = [json.loads(l) for l in open(args.questions_file, encoding="utf-8")]
 
     out_records = []
     debug_records = []
@@ -287,13 +291,13 @@ def main():
         out_records.append(record)
         debug_records.append({**record, "_debug": result})
 
-    with open(args.out_file, "w") as f:
+    with open(args.out_file, "w", encoding="utf-8") as f:
         for r in out_records:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
     if args.debug:
         debug_path = Path(args.out_file).with_suffix(".debug.jsonl")
-        with open(debug_path, "w") as f:
+        with open(debug_path, "w", encoding="utf-8") as f:
             for r in debug_records:
                 f.write(json.dumps(r, ensure_ascii=False, default=str) + "\n")
         print(f"Debug output written to {debug_path}")

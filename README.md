@@ -8,13 +8,27 @@ and [`NOTES.md`](NOTES.md) for how the system works and what I'd do next.
 
 ## Setup
 
-Requires Python 3.11+.
+Requires **Python 3.12 or 3.13** (the pinned numpy has no wheels for 3.11
+or older). Tested on macOS; the code also runs on Windows and Linux via the
+fallback backend below.
 
+macOS / Linux:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+Windows (PowerShell):
+```powershell
+py -3.13 -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+On Windows, use `python` wherever the commands below say `python3`.
+
+The first run downloads two models from Hugging Face: the embedding model
+(~1.1 GB, used on every platform) and, off macOS, the fallback LLM (~1 GB).
 
 **Generation backend** — no API key needed either way:
 
@@ -51,9 +65,15 @@ python3 index.py
 
 # 3. Answer a batch of questions (JSONL in, JSONL out in the assignment's
 #    answers.jsonl schema)
-python3 query.py ../questions_dev.jsonl ../answers_dev.jsonl --debug
-python3 query.py ../questions_eval.jsonl ../answers.jsonl
+python3 query.py ../questions_dev.jsonl ../answers_dev_rerun.jsonl --debug
+python3 query.py ../questions_eval.jsonl ../answers_rerun.jsonl
 ```
+
+The committed `answers.jsonl` / `answers_dev.jsonl` were produced on the
+Apple on-device path. The commands above write to separate `*_rerun` files
+so a run on another machine doesn't overwrite them; on the fallback path,
+expect those files to differ (see `SCOPE.md`). On CPU the fallback takes a
+few minutes per question set.
 
 `query.py --debug` also writes a `.debug.jsonl` file alongside the output
 with the raw model output, retrieval scores, and which guardrail (if any)

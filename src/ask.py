@@ -28,6 +28,7 @@ def ask(retriever, question):
 
 
 def main():
+    sys.stdout.reconfigure(encoding="utf-8")  # Hindi questions on a Windows console
     print("Loading index...", file=sys.stderr)
     retriever = Retriever()
 

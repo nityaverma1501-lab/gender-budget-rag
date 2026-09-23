@@ -173,7 +173,7 @@ def main():
         c["id"] = f"{i:05d}"
 
     OUT_PATH.parent.mkdir(exist_ok=True)
-    with open(OUT_PATH, "w") as f:
+    with open(OUT_PATH, "w", encoding="utf-8") as f:
         for c in all_chunks:
             f.write(json.dumps(c, ensure_ascii=False) + "\n")
 
